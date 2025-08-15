@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Learn microScript 2.0</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/theme/material-darker.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .CodeMirror {
+            height: 350px;
+            font-size: 16px;
+            border-radius: 0.5rem;
+        }
+        #preview-canvas {
+            background-color: #1a202c;
+            border-radius: 0.5rem;
+            width: 100%;
+            height: 350px;
+        }
+    </style>
+</head>
+<body class="bg-gray-800 text-gray-200">
+
+    <div class="flex h-screen">
+        <!-- Sidebar -->
+        <aside class="w-1/4 bg-gray-900 p-6 overflow-y-auto">
+            <h1 class="text-2xl font-bold text-cyan-400 mb-6">Learn microScript</h1>
+            <nav id="lesson-nav" class="space-y-2">
+                <!-- Lessons will be populated here -->
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="w-3/4 p-8 flex flex-col">
+            <div id="lesson-content" class="flex-grow">
+                <h2 id="lesson-title" class="text-3xl font-bold mb-4"></h2>
+                <div id="lesson-instructions" class="prose prose-invert max-w-none mb-6"></div>
+                
+                <div class="grid grid-cols-2 gap-6">
+                    <div>
+                        <h3 class="text-xl font-semibold mb-2">Your Code</h3>
+                        <textarea id="code-editor"></textarea>
+                    </div>
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <h3 class="text-xl font-semibold">Live Preview</h3>
+                            <button id="reset-button" class="text-sm bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded-lg transition" title="Reset Simulation">
+                                <i class="fas fa-redo"></i> Reset
+                            </button>
+                        </div>
+                        <canvas id="preview-canvas"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-6 flex justify-between items-center">
+                <button id="prev-lesson" class="bg-gray-700 hover:bg-gray-600 px-6 py-2 rounded-lg transition">Previous</button>
+                <button id="next-lesson" class="bg-cyan-600 hover:bg-cyan-700 px-6 py-2 rounded-lg transition">Next</button>
+            </div>
+        </main>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/javascript/javascript.min.js"></script>
+    <script>
+        const lessons = [
+            {
+                title: "Hello, World!",
+                instructions: `<p>Welcome! Let's draw to the screen. The <code>draw</code> function runs 60 times per second. Use <code>screen.drawText(text, x, y, size, color)</code> to display text.</p><p><strong>Goal:</strong> Display "Hello, World!" in the center.</p>`,
+                starter_code: `draw = function() {\n  screen.clear();\n  screen.drawText("Hello, World!", 0, 0, 20, "white");\n}`
+            },
+            {
+                title: "Variables",
+                instructions: `<p>Variables store data. Let's create one for a player's x-position and use it to draw a circle with <code>screen.drawCircle(x, y, radius, color)</code>.</p><p><strong>Goal:</strong> Create a variable <code>player_x</code> and use it to draw a circle. Try changing its value!</p>`,
+                starter_code: `player_x = 50;\n\ndraw = function() {\n  screen.clear();\n  screen.drawCircle(player_x, 0, 20, "cyan");\n}`
+            },
+            {
+                title: "Player Input",
+                instructions: `<p>Let's get interactive! The <code>update</code> function handles logic. Check for input with <code>keyboard.RIGHT</code> or <code>keyboard.LEFT</code> inside an <code>if</code> statement.</p><p><strong>Goal:</strong> Move the circle left and right using the arrow keys.</p>`,
+                starter_code: `player_x = 0;\n\nupdate = function() {\n  if (keyboard.RIGHT) {\n    player_x = player_x + 2;\n  }\n  \n  if (keyboard.LEFT) {\n    player_x = player_x - 2;\n  }\n}\n\ndraw = function() {\n  screen.clear();\n  screen.drawCircle(player_x, 0, 20, "cyan");\n}`
+            },
+            {
+                title: "Creating a Player Object",
+                instructions: `<p>Objects are collections of variables. They're great for organizing data for things like a player.</p><p><strong>Goal:</strong> Create a <code>player</code> object with x, y, and speed properties, and use them for movement.</p>`,
+                starter_code: `init = function() {\n  player = {\n    x: 0,\n    y: 0,\n    speed: 3\n  };\n}\n\nupdate = function() {\n  if (keyboard.RIGHT) {\n    player.x = player.x + player.speed;\n  }\n  if (keyboard.LEFT) {\n    player.x = player.x - player.speed;\n  }\n}\n\ndraw = function() {\n  screen.clear();\n  screen.drawCircle(player.x, player.y, 20, "cyan");\n}`
+            },
+        ];
+
+        let currentLesson = 0;
+        const lessonNav = document.getElementById('lesson-nav');
+        const lessonTitle = document.getElementById('lesson-title');
+        const lessonInstructions = document.getElementById('lesson-instructions');
+        const prevButton = document.getElementById('prev-lesson');
+        const nextButton = document.getElementById('next-lesson');
+        const resetButton = document.getElementById('reset-button');
+
+        const editor = CodeMirror.fromTextArea(document.getElementById('code-editor'), {
+            lineNumbers: true,
+            theme: 'material-darker',
+            mode: 'javascript'
+        });
+
+        const canvas = document.getElementById('preview-canvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            const previewContainer = canvas.parentElement;
+            canvas.width = previewContainer.clientWidth;
+            canvas.height = 350;
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+
+        // --- Simulated microStudio Environment ---
+        let game = { init: () => {}, update: () => {}, draw: () => {} };
+        
+        // Declare all potential game variables and functions in the top-level scope
+        let screen, keyboard, player, player_x;
+        let init, update, draw;
+
+        function resetEnvironment() {
+            screen = {
+                clear: (color = '#1a202c') => {
+                    ctx.fillStyle = color;
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                },
+                drawText: (text, x, y, size, color) => {
+                    ctx.font = `${size}px Arial`;
+                    ctx.fillStyle = color;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(text, x + canvas.width / 2, -y + canvas.height / 2);
+                },
+                drawCircle: (x, y, radius, color) => {
+                    ctx.beginPath();
+                    ctx.arc(x + canvas.width / 2, -y + canvas.height / 2, radius, 0, Math.PI * 2);
+                    ctx.fillStyle = color;
+                    ctx.fill();
+                }
+            };
+            keyboard = { LEFT: false, RIGHT: false, UP: false, DOWN: false };
+            player = {};
+            player_x = 0;
+            // Reset functions to avoid carrying over from previous runs
+            init = () => {};
+            update = () => {};
+            draw = () => {};
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft') keyboard.LEFT = true;
+            if (e.key === 'ArrowRight') keyboard.RIGHT = true;
+        });
+        window.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowLeft') keyboard.LEFT = false;
+            if (e.key === 'ArrowRight') keyboard.RIGHT = false;
+        });
+
+        function gameLoop() {
+            game.update();
+            game.draw();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        function runCode() {
+            try {
+                resetEnvironment();
+                let code = editor.getValue();
+                
+                // The user's code will assign to the global init, update, draw variables
+                eval(code);
+
+                // Assign the (potentially new) functions to our game object
+                game.init = init;
+                game.update = update;
+                game.draw = draw;
+                
+                game.init();
+
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        editor.on('change', runCode);
+        resetButton.addEventListener('click', runCode);
+
+        function loadLesson(index) {
+            currentLesson = index;
+            const lesson = lessons[index];
+            lessonTitle.textContent = lesson.title;
+            lessonInstructions.innerHTML = lesson.instructions;
+            editor.setValue(lesson.starter_code);
+            // runCode is triggered by setValue's 'change' event
+            
+            document.querySelectorAll('#lesson-nav button').forEach((btn, i) => {
+                btn.classList.toggle('bg-cyan-600', i === index);
+                btn.classList.toggle('bg-gray-700', i !== index);
+            });
+
+            prevButton.disabled = index === 0;
+            nextButton.disabled = index === lessons.length - 1;
+        }
+
+        prevButton.addEventListener('click', () => {
+            if (currentLesson > 0) {
+                loadLesson(currentLesson - 1);
+            }
+        });
+
+        nextButton.addEventListener('click', () => {
+            if (currentLesson < lessons.length - 1) {
+                loadLesson(currentLesson + 1);
+            }
+        });
+
+        lessons.forEach((lesson, index) => {
+            const button = document.createElement('button');
+            button.textContent = lesson.title;
+            button.className = 'w-full text-left px-4 py-2 rounded-lg hover:bg-gray-600 transition';
+            button.onclick = () => loadLesson(index);
+            lessonNav.appendChild(button);
+        });
+        
+        // Initial setup
+        resizeCanvas();
+        loadLesson(0);
+        gameLoop();
+
+    </script>
+</body>
+</html>
